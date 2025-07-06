@@ -1,0 +1,39 @@
+<!-- core/templates/index.html -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SQL-to-Docs Demo</title>
+    <link href="{% static 'style.css' %}" rel="stylesheet">
+    <script defer src="{% static 'app.js' %}"></script>
+</head>
+<body>
+
+<div id="toolbar">
+    <button id="btn-up">Upload SQL (.xlsx)</button>
+    <button id="btn-run" disabled>Run</button>
+    <a id="btn-dl" class="btn-link disabled" target="_blank">Download ZIP</a>
+</div>
+
+<div id="flex">
+
+    <div id="left">
+        <span id="file-name" class="file-badge" style="display:none"></span>
+        <div id="code-container">
+            <textarea id="code" placeholder="Paste / type your SQL here …"></textarea>
+        </div>
+        <input id="sql-file" type="file" accept=".xls,.xlsx" hidden>
+    </div>
+
+    <div id="right">
+        <h3>Translation Preview</h3>
+        <div id="preview">
+            <p class="hint">no preview</p>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
