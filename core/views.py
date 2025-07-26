@@ -36,7 +36,8 @@ def _table_html(xlsx: Path) -> str:
         df["Content"]
         .fillna("")
         .astype(str)
-        .str.replace(r"\\n", "<br>", regex=True)
+        .str.replace(r"\\n", "<br>", regex=True)  
+        .str.replace(r"\r?\n", "<br>", regex=True) 
     )
     return df.to_html(index=False, border=1, classes="tbl", escape=False)
 
