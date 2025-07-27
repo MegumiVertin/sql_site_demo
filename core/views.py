@@ -8,7 +8,10 @@ import pandas as pd
 from django.conf import settings
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.shortcuts import render
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, require_GET
+from django.core.cache import cache
+
+from .tasks import run_translation  
 
 if getattr(settings, "DEMO_MODE", False):
     from . import demo_logic as logic
@@ -36,8 +39,8 @@ def _table_html(xlsx: Path) -> str:
         df["Content"]
         .fillna("")
         .astype(str)
-        .str.replace(r"\\n", "<br>", regex=True)  
-        .str.replace(r"\r?\n", "<br>", regex=True) 
+        .str.replace(r"\\n", "<br>", regex=True)
+        .str.replace(r"\r?\n", "<br>", regex=True)
     )
     return df.to_html(index=False, border=1, classes="tbl", escape=False)
 
@@ -62,7 +65,7 @@ def index(request):
 
 
 @csrf_exempt
-def run(request):
+def translate(request):
     if request.method != "POST":
         return HttpResponseBadRequest("POST only")
 
@@ -88,20 +91,26 @@ def run(request):
     rows = len(pd.read_excel(sql_xlsx))
     pd.DataFrame([{"prompt": FIXED_PROMPT}] * rows).to_excel(prm_xlsx, index=False)
 
-    logic.run_analysis(sql_xlsx, prm_xlsx, tmp_dir)
-
-    media_tmp = Path("media/tmp")
-    media_tmp.mkdir(parents=True, exist_ok=True)
-    zip_name = f"{tmp_dir.name}.zip"
-    zip_path = media_tmp / zip_name
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(tmp_dir / "translation_results.xlsx", "translation.xlsx")
-        zf.write(tmp_dir / "analysis_results.xlsx", "analysis.xlsx")
+    job = run_translation.delay(str(sql_xlsx), str(prm_xlsx), str(tmp_dir))
+    cache.set(job.id, 0, 3600)
 
     return JsonResponse(
         {
-            "html_trans": _table_html(tmp_dir / "translation_results.xlsx"),
+            "job_id": job.id,
             "code_html": _code_html(sql_src),
-            "zip_url": f"/media/tmp/{zip_name}",
+            "html_trans": _table_html(sql_xlsx), 
         }
     )
+
+
+@require_GET
+def progress(request, job_id):
+    pct = cache.get(job_id)
+    if pct is None:
+        return JsonResponse({"status": "unknown"}, status=404)
+
+    if pct == 100:
+        zip_url = f"/media/tmp/{job_id}.zip"
+        return JsonResponse({"status": "done", "progress": 100, "zip_url": zip_url})
+
+    return JsonResponse({"status": "running", "progress": pct})
