@@ -8,10 +8,11 @@ import pandas as pd
 from django.conf import settings
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.shortcuts import render
-from django.views.decorators.csrf import csrf_exempt, require_GET
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET
 from django.core.cache import cache
 
-from .tasks import run_translation  
+from .tasks import run_translation
 
 if getattr(settings, "DEMO_MODE", False):
     from . import demo_logic as logic
@@ -98,7 +99,7 @@ def translate(request):
         {
             "job_id": job.id,
             "code_html": _code_html(sql_src),
-            "html_trans": _table_html(sql_xlsx), 
+            "html_trans": _table_html(sql_xlsx),
         }
     )
 
