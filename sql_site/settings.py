@@ -16,16 +16,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ----------------------------------------------------------------------------
 # Core security & debug
 # ----------------------------------------------------------------------------
-# SECRET_KEY **must** be set in your hosting platform's env vars
 SECRET_KEY: str = os.getenv("DJANGO_SECRET_KEY", "unsafe‑dev‑key‑replace‑me")
-
-# DEBUG should be False in prod; enable True locally with `export DJANGO_DEBUG=True`
 DEBUG: bool = os.getenv("DJANGO_DEBUG", "False").lower() in {"1", "true", "yes"}
 
-# Comma‑separated hosts, e.g. "example.com,www.example.com"
-ALLOWED_HOSTS: list[str] = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS: list[str] = os.getenv(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1"
+).split(",")
 
-# Trust CSRF from Render / Fly preview domains etc.
 CSRF_TRUSTED_ORIGINS: list[str] = [
     f"https://{h}" for h in ALLOWED_HOSTS if not (h.startswith("127.") or h == "localhost")
 ]
@@ -40,17 +37,13 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
-    # third‑party
-    "whitenoise.runserver_nostatic",  # keep before django.contrib.staticfiles
-
-    # local apps
+    "whitenoise.runserver_nostatic",
     "core",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # serve static files efficiently
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -82,8 +75,6 @@ WSGI_APPLICATION = "sql_site.wsgi.application"
 # ----------------------------------------------------------------------------
 # Database
 # ----------------------------------------------------------------------------
-# Tries DATABASE_URL first (e.g. "postgres://user:pass@host:5432/db")
-# Falls back to local SQLite for dev.
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
@@ -113,12 +104,8 @@ USE_TZ = True
 # Static & media files
 # ----------------------------------------------------------------------------
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"  # folder where collectstatic puts files
-
-# Additional static dirs for local dev (ignored on prod if not present)
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-
-# Whitenoise: enable compression & long‑cache headers
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
@@ -140,6 +127,20 @@ if not DEBUG:
 # Misc
 # ----------------------------------------------------------------------------
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# Toggle demo / real API mode (example custom flag)
 DEMO_MODE = os.getenv("DEMO_MODE", "False").lower() in {"1", "true", "yes"}
+
+# ----------------------------------------------------------------------------
+# Celery & Redis (progress bar support)
+# ----------------------------------------------------------------------------
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/1")
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TIMEZONE = "UTC"
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("REDIS_CACHE_URL", "redis://127.0.0.1:6379/2"),
+        "TIMEOUT": 3600,
+    }
+}
