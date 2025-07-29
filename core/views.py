@@ -1,7 +1,5 @@
 # core/views.py
-import io
-import zipfile
-import tempfile
+import io, zipfile, tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -14,6 +12,7 @@ from django.core.cache import cache
 
 from .tasks import run_translation
 
+# choose demo or real logic
 if getattr(settings, "DEMO_MODE", False):
     from . import demo_logic as logic
 else:
@@ -35,7 +34,12 @@ FIXED_PROMPT = (
 
 
 def _table_html(xlsx: Path) -> str:
-    df = pd.read_excel(xlsx)[["SQL_Index", "Type", "Content"]]
+    """Render preview table if translation columns exist; otherwise placeholder."""
+    df = pd.read_excel(xlsx)
+    if not {"SQL_Index", "Type", "Content"}.issubset(df.columns):
+        return '<p class="hint">Processing…</p>'
+
+    df = df[["SQL_Index", "Type", "Content"]]
     df["Content"] = (
         df["Content"]
         .fillna("")
@@ -48,16 +52,12 @@ def _table_html(xlsx: Path) -> str:
 
 def _code_html(sql: str) -> str:
     lines = sql.rstrip().splitlines()
-    pad = len(str(len(lines)))
+    pad   = len(str(len(lines)))
 
     def esc(s: str) -> str:
-        return (
-            s.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-    body = "\n".join(f"{str(i + 1).rjust(pad)}  {esc(l)}" for i, l in enumerate(lines))
+    body = "\n".join(f"{str(i+1).rjust(pad)}  {esc(l)}" for i, l in enumerate(lines))
     return f'<pre class="code-block">{body}</pre>'
 
 
@@ -72,18 +72,17 @@ def translate(request):
 
     sql_text = request.POST.get("sql_code", "").strip()
     sql_file = request.FILES.get("sql_file")
-
     if not sql_text and not sql_file:
         return HttpResponseBadRequest("sql_code or sql_file required")
 
-    tmp_dir = Path(tempfile.mkdtemp())
+    tmp_dir  = Path(tempfile.mkdtemp())
     sql_xlsx = tmp_dir / "sql.xlsx"
     prm_xlsx = tmp_dir / "prompt.xlsx"
 
     if sql_file:
         raw = sql_file.read()
         sql_xlsx.write_bytes(raw)
-        df_in = pd.read_excel(io.BytesIO(raw))
+        df_in   = pd.read_excel(io.BytesIO(raw))
         sql_src = "\n".join(str(x) for x in df_in.iloc[:, 0])
     else:
         sql_src = sql_text
@@ -92,14 +91,15 @@ def translate(request):
     rows = len(pd.read_excel(sql_xlsx))
     pd.DataFrame([{"prompt": FIXED_PROMPT}] * rows).to_excel(prm_xlsx, index=False)
 
+    # enqueue async translation
     job = run_translation.delay(str(sql_xlsx), str(prm_xlsx), str(tmp_dir))
     cache.set(job.id, 0, 3600)
 
     return JsonResponse(
         {
-            "job_id": job.id,
-            "code_html": _code_html(sql_src),
-            "html_trans": _table_html(sql_xlsx),
+            "job_id":     job.id,
+            "code_html":  _code_html(sql_src),
+            "html_trans": '<p class="hint">Processing…</p>',  # placeholder
         }
     )
 
